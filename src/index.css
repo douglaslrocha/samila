@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Montserrat', sans-serif;
+    color: #3D3229;
+    background-color: #F7F4EF;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: 'Cormorant Garamond', serif;
+  }
+
+  .font-cinzel {
+    font-family: 'Cinzel', serif;
+  }
+}
+
+/* Previne o zoom automático invasivo do iPhone ao focar em qualquer input, select ou textarea */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Melhora a resposta ao toque e previne gestos acidentais de zoom duplo */
+input,
+select,
+textarea,
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Custom smooth luxury animations and scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F4EF;
+}
+::-webkit-scrollbar-thumb {
+  background: #BFAE9C;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7A5B43;
+}
+
+/* Grain texture overlay option */
+.bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* Utilitário para ocultar scrollbars nativas mantendo a rolagem fluida */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Animações de Luxo: Bordas e Frases Reluzentes */
+@keyframes luxuryBorderGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3), 0 0 45px rgba(212, 175, 55, 0.15), inset 0 0 15px rgba(212, 175, 55, 0.15);
+    border-color: rgba(212, 175, 55, 0.65);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(255, 215, 0, 0.55), 0 0 60px rgba(218, 165, 32, 0.28), inset 0 0 25px rgba(255, 215, 0, 0.28);
+    border-color: rgba(255, 223, 128, 0.95);
+  }
+}
+
+@keyframes luxuryTextShimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.luxury-glow-card {
+  animation: luxuryBorderGlow 5.5s ease-in-out infinite;
+}
+
+.luxury-text-shimmer {
+  background: linear-gradient(90deg, #2A211B 0%, #876742 20%, #D4AF37 40%, #FFF3D1 50%, #D4AF37 60%, #876742 80%, #2A211B 100%);
+  background-size: 250% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: luxuryTextShimmer 5s ease-in-out infinite;
+}
+
+/* Efeito Lottie Beacon: pulso luminoso suave e contínuo (brilho orgânico sem piscar brusco) */
+@keyframes lottieAuraPulse {
+  0%, 100% {
+    transform: scale(0.95);
+    opacity: 0.9;
+    box-shadow: 0 0 6px 1px rgba(212, 175, 55, 0.7);
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+    box-shadow: 0 0 16px 4px rgba(212, 175, 55, 0.85), 0 0 26px 8px rgba(212, 175, 55, 0.35);
+  }
+}
+
+@keyframes lottieRingWave {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.lottie-beacon-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lottie-beacon-core {
+  animation: lottieAuraPulse 2.4s ease-in-out infinite;
+}
+
+.lottie-beacon-wave {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(212, 175, 55, 0.8);
+  animation: lottieRingWave 2.4s cubic-bezier(0.2, 0.8, 0.3, 1) infinite;
+  pointer-events: none;
+}

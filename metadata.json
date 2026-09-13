@@ -1,0 +1,6 @@
+{
+  "name": "Maison Entrelaço",
+  "description": "Uma casa feita de histórias. Objetos para perfumar, cuidar e vestir a vida de beleza. Europa monárquica, natureza e artesania.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

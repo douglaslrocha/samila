@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <!-- Gradiente Metálico Nobre Ouro Champagne -->
+    <linearGradient id="goldLuxury" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9E7D56" />
+      <stop offset="35%" stop-color="#CBB593" />
+      <stop offset="70%" stop-color="#876742" />
+      <stop offset="100%" stop-color="#BCA585" />
+    </linearGradient>
+
+    <linearGradient id="charcoalInk" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#211E1B" />
+      <stop offset="100%" stop-color="#3A322A" />
+    </linearGradient>
+
+    <!-- Efeito de Relevo e Sombra Suave -->
+    <filter id="subtleEmboss" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.08" />
+    </filter>
+
+    <!-- Trajetórias para Texto Curvado Perfeito -->
+    <path id="textArcTop" d="M 32,100 A 68,68 0 0,1 168,100" fill="none" />
+    <path id="textArcBottom" d="M 168,103 A 68,68 0 0,1 32,103" fill="none" />
+  </defs>
+
+  <!-- Fundo Circular Marfim Seda -->
+  <circle cx="100" cy="100" r="97" fill="#FDFBF8" filter="url(#subtleEmboss)" />
+
+  <!-- Aro Externo Fino de Ouro Velho -->
+  <circle cx="100" cy="100" r="95" stroke="url(#goldLuxury)" stroke-width="1.6" fill="none" />
+  
+  <!-- Aro Decorativo Pontilhado de Precisão -->
+  <circle cx="100" cy="100" r="90.5" stroke="#CBB593" stroke-width="0.8" stroke-dasharray="2 3" fill="none" opacity="0.85" />
+
+  <!-- Texto Curvado Superior: MAISON -->
+  <text font-family="'Cinzel', 'Playfair Display', 'Times New Roman', serif" font-size="14.5" font-weight="600" fill="url(#charcoalInk)" letter-spacing="4.5">
+    <textPath href="#textArcTop" startOffset="50%" text-anchor="middle">
+      MAISON
+    </textPath>
+  </text>
+
+  <!-- Marcadores Horizontais Sutis de Joalheria (Losangos / Estrelas) -->
+  <polygon points="26,100 28.5,97.5 31,100 28.5,102.5" fill="#876742" />
+  <polygon points="169,100 171.5,97.5 174,100 171.5,102.5" fill="#876742" />
+
+  <!-- Texto Curvado Inferior: ENTRELAÇO -->
+  <text font-family="'Cinzel', 'Playfair Display', 'Times New Roman', serif" font-size="12" font-weight="500" fill="url(#charcoalInk)" letter-spacing="4.2">
+    <textPath href="#textArcBottom" startOffset="50%" text-anchor="middle">
+      ENTRELAÇO
+    </textPath>
+  </text>
+
+  <!-- Aro Interno Monograma -->
+  <circle cx="100" cy="100" r="54" stroke="url(#goldLuxury)" stroke-width="1.2" fill="none" />
+  <circle cx="100" cy="100" r="51.5" stroke="#E3D7C7" stroke-width="0.75" fill="none" />
+
+  <!-- Mini Selo de Origem / Atelier -->
+  <text x="100" y="73" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="6.5" font-weight="600" fill="#876742" letter-spacing="2.5">
+    PARIS · ATELIER
+  </text>
+
+  <!-- Monograma Central 'ME' Entrelaçado Estilo Alta Joalheria -->
+  <!-- Letra M com traços serifados finos -->
+  <path d="M 80,126 L 80,87 L 91,120 L 100,98 L 109,120 L 120,87 L 120,126" 
+        fill="none" 
+        stroke="url(#charcoalInk)" 
+        stroke-width="2.6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+
+  <!-- Letra E Elegante Sobreposta e Fundida ao Monograma com Curvas de Caligrafia Clássica -->
+  <path d="M 87,90 L 115,90 M 87,105 L 108,105 M 87,124 L 116,124" 
+        fill="none" 
+        stroke="url(#goldLuxury)" 
+        stroke-width="1.8" 
+        stroke-linecap="round" 
+        opacity="0.9" />
+
+  <!-- Folhas / Ramos Botânicos Minimalistas no Rodapé do Monograma -->
+  <path d="M 91,133 C 94,131 97,131 100,133 C 103,131 106,131 109,133" 
+        fill="none" 
+        stroke="url(#goldLuxury)" 
+        stroke-width="1" 
+        stroke-linecap="round" />
+  
+  <circle cx="100" cy="133" r="1.2" fill="#876742" />
+</svg>
