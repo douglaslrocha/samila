@@ -136,6 +136,15 @@ export default function App() {
     // 1. Carregamento inicial do banco de dados remoto se configurado
     let isMounted = true;
     async function loadInitialRemoteData() {
+      // Garantia absoluta de segurança (2.5 segundos): se a rede do VPS/Coolify falhar,
+      // ou se o Supabase travar por DNS/CORS, libera a tela imediatamente para uso offline/local.
+      const safetyTimeout = setTimeout(() => {
+        if (isMounted) {
+          console.warn('[Maison Guard] Destravando tela via timer de segurança (Supabase demorou mais que 2.5s)');
+          setIsInitialSyncing(false);
+        }
+      }, 2500);
+
       try {
         const [remoteSettings, remoteProducts] = await Promise.all([
           fetchStoreSettingsFromSupabase(),
@@ -156,6 +165,7 @@ export default function App() {
       } catch (err) {
         console.warn('[Supabase] Inicializando com dados locais (fallback)', err);
       } finally {
+        clearTimeout(safetyTimeout);
         if (isMounted) {
           setIsInitialSyncing(false);
         }
