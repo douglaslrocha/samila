@@ -80,17 +80,8 @@ export default function App() {
   const [adminPreviewMode, setAdminPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const isAdminOpenRef = useRef(isAdminOpen);
 
-  // Status de carregamento inicial (impede exibir mockups antigos durante os primeiros instantes)
-  const [isInitialSyncing, setIsInitialSyncing] = useState(() => {
-    // Se já tiver dados no cache local (localStorage), não precisa bloquear a tela
-    try {
-      const hasLocalSettings = Boolean(safeStorage.getItem('maison_store_settings'));
-      const hasLocalProducts = Boolean(safeStorage.getItem('maison_products'));
-      return !(hasLocalSettings && hasLocalProducts);
-    } catch {
-      return true;
-    }
-  });
+  // Status de carregamento inicial desativador de bloqueio (agora o carregamento é 100% silencioso em segundo plano para inicialização instantânea em 0ms)
+  const [isInitialSyncing, setIsInitialSyncing] = useState(false);
 
   useEffect(() => {
     isAdminOpenRef.current = isAdminOpen;
@@ -360,26 +351,9 @@ export default function App() {
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Tela de apresentação da Maison durante o carregamento inicial dos dados reais
-  if (isInitialSyncing) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F7F4EF] text-[#3D3229]">
-        <div className="flex flex-col items-center space-y-5 animate-pulse">
-          <div className="w-16 h-16 rounded-full border border-[#7A5B43]/30 flex items-center justify-center p-2 bg-white/60 shadow-sm">
-            <span className="font-cinzel text-xl font-medium tracking-widest text-[#7A5B43]">ME</span>
-          </div>
-          <div className="text-center space-y-1.5">
-            <h2 className="font-serif text-lg tracking-[0.25em] text-[#3D3229] uppercase font-light">
-              Maison Entrelaço
-            </h2>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#7A5B43] font-mono">
-              Carregando acervo do atelier...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Tela de apresentação da Maison desativada para garantir carregamento instantâneo em 0ms sem risco de travamentos
+  // Anteriormente, se a sincronização inicial ficasse pendente, exibia a tela de carregamento.
+  // Agora o app renderiza os dados locais/padrão imediatamente de forma resiliente.
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] text-[#3D3229] font-sans selection:bg-[#6F775C] selection:text-[#F7F4EF]">
