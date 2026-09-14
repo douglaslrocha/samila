@@ -90,7 +90,7 @@ export const Footer: React.FC<FooterProps> = ({
     }
   };
 
-  const columns: FooterColumn[] = settings?.columns || [
+  const rawColumns: FooterColumn[] = settings?.columns || [
     {
       id: 'col-maison',
       title: 'A MAISON',
@@ -127,6 +127,11 @@ export const Footer: React.FC<FooterProps> = ({
       ]
     }
   ];
+
+  const columns: FooterColumn[] = rawColumns.map(col => ({
+    ...col,
+    items: Array.isArray(col.items) ? col.items : []
+  }));
 
   const socials: FooterSocialItem[] = settings?.socials || [
     {
@@ -793,7 +798,10 @@ const FooterEditorModal: React.FC<FooterEditorModalProps> = ({
 
   // Columns state
   const [columns, setColumns] = useState<FooterColumn[]>(() => 
-    JSON.parse(JSON.stringify(settings.columns || []))
+    JSON.parse(JSON.stringify(settings.columns || [])).map((col: any) => ({
+      ...col,
+      items: Array.isArray(col.items) ? col.items : []
+    }))
   );
 
   // Expanded column in accordion

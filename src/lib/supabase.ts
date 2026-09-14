@@ -436,8 +436,14 @@ export function deepMergeStoreSettings(data: any): StoreCustomizationSettings {
       }
     },
     columns: (Array.isArray(rawFooter.columns) && rawFooter.columns.length > 0)
-      ? rawFooter.columns
-      : DEFAULT_STORE_SETTINGS.footer?.columns || [],
+      ? rawFooter.columns.map((col: any) => ({
+          ...col,
+          items: Array.isArray(col.items) ? col.items : []
+        }))
+      : (DEFAULT_STORE_SETTINGS.footer?.columns || []).map((col: any) => ({
+          ...col,
+          items: Array.isArray(col.items) ? col.items : []
+        })),
     socials: (Array.isArray(rawFooter.socials) && rawFooter.socials.length > 0)
       ? rawFooter.socials
       : DEFAULT_STORE_SETTINGS.footer?.socials || [],
