@@ -1,5 +1,19 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { StoreCustomizationSettings, Product } from '../types';
+import {
+  StoreCustomizationSettings,
+  Product,
+  StoreGeneralSettings,
+  HeaderSettings,
+  HeroSettings,
+  FounderSettings,
+  DashboardFounderSettings,
+  TeamSettings,
+  ProductLine,
+  DeliveryExperienceSettings,
+  BrandQuoteSettings,
+  FooterSettings,
+  GiftPresentationSettings
+} from '../types';
 import { DEFAULT_STORE_SETTINGS } from '../data/defaultSettings';
 import { safeStorage } from '../utils/safeStorage';
 
@@ -186,6 +200,290 @@ export async function testSupabaseConnection(testUrl?: string, testKey?: string)
 }
 
 /**
+ * Função utilitária para fusão profunda (deep merge) das configurações da loja.
+ * Garante que NENHUM campo, seção, texto, botão ou sub-objeto fique undefined ou vazio
+ * caso falte na tabela do Supabase.
+ */
+export function deepMergeStoreSettings(data: any): StoreCustomizationSettings {
+  if (!data || typeof data !== 'object') {
+    return { ...DEFAULT_STORE_SETTINGS };
+  }
+
+  const rawGeneral = (data.general && typeof data.general === 'object') ? data.general : {};
+  const rawHeader = (data.header && typeof data.header === 'object') ? data.header : {};
+  const rawHero = (data.hero && typeof data.hero === 'object') ? data.hero : {};
+  const rawFounder = (data.founder && typeof data.founder === 'object') ? data.founder : {};
+  const rawDashboardFounder = (data.dashboard_founder && typeof data.dashboard_founder === 'object') 
+    ? data.dashboard_founder 
+    : (data.dashboardFounder && typeof data.dashboardFounder === 'object')
+      ? data.dashboardFounder
+      : (rawGeneral.dashboardFounder && typeof rawGeneral.dashboardFounder === 'object')
+        ? rawGeneral.dashboardFounder
+        : {};
+  const rawTeam = (data.team && typeof data.team === 'object') ? data.team : {};
+  const rawProductLines = Array.isArray(data.product_lines) 
+    ? data.product_lines 
+    : Array.isArray(data.productLines) 
+      ? data.productLines 
+      : [];
+  const rawDeliveryExperience = (data.delivery_experience && typeof data.delivery_experience === 'object') 
+    ? data.delivery_experience 
+    : (data.deliveryExperience && typeof data.deliveryExperience === 'object')
+      ? data.deliveryExperience
+      : {};
+  const rawBrandQuote = (data.brand_quote && typeof data.brand_quote === 'object')
+    ? data.brand_quote
+    : (data.brandQuote && typeof data.brandQuote === 'object')
+      ? data.brandQuote
+      : {};
+  const rawFooter = (data.footer && typeof data.footer === 'object') ? data.footer : {};
+  const rawGiftPresentation = (data.gift_presentation && typeof data.gift_presentation === 'object')
+    ? data.gift_presentation
+    : (data.giftPresentation && typeof data.giftPresentation === 'object')
+      ? data.giftPresentation
+      : (rawGeneral.giftPresentation && typeof rawGeneral.giftPresentation === 'object')
+        ? rawGeneral.giftPresentation
+        : {};
+
+  // 1. General
+  const general: StoreGeneralSettings = {
+    ...DEFAULT_STORE_SETTINGS.general!,
+    ...rawGeneral
+  };
+
+  // 2. Header
+  const header: HeaderSettings = {
+    ...DEFAULT_STORE_SETTINGS.header,
+    ...rawHeader,
+    announcementBar: {
+      ...DEFAULT_STORE_SETTINGS.header.announcementBar,
+      ...(rawHeader.announcementBar || {})
+    },
+    logo: {
+      ...DEFAULT_STORE_SETTINGS.header.logo,
+      ...(rawHeader.logo || {})
+    },
+    actions: {
+      ...DEFAULT_STORE_SETTINGS.header.actions,
+      ...(rawHeader.actions || {})
+    },
+    style: {
+      ...DEFAULT_STORE_SETTINGS.header.style,
+      ...(rawHeader.style || {})
+    },
+    navLinks: (Array.isArray(rawHeader.navLinks) && rawHeader.navLinks.length > 0)
+      ? rawHeader.navLinks
+      : DEFAULT_STORE_SETTINGS.header.navLinks
+  };
+
+  // 3. Hero
+  const hero: HeroSettings = {
+    ...DEFAULT_STORE_SETTINGS.hero,
+    ...rawHero,
+    overlay: {
+      ...DEFAULT_STORE_SETTINGS.hero.overlay,
+      ...(rawHero.overlay || {})
+    },
+    slides: (Array.isArray(rawHero.slides) && rawHero.slides.length > 0)
+      ? rawHero.slides
+      : DEFAULT_STORE_SETTINGS.hero.slides,
+    desktopMedia: {
+      ...DEFAULT_STORE_SETTINGS.hero.desktopMedia,
+      ...(rawHero.desktopMedia || {})
+    },
+    mobileMedia: {
+      ...DEFAULT_STORE_SETTINGS.hero.mobileMedia,
+      ...(rawHero.mobileMedia || {})
+    },
+    elements: {
+      tagline: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.tagline,
+        ...(rawHero.elements?.tagline || {})
+      },
+      headline: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.headline,
+        ...(rawHero.elements?.headline || {})
+      },
+      subtitle: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.subtitle,
+        ...(rawHero.elements?.subtitle || {})
+      },
+      primaryButton: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.primaryButton,
+        ...(rawHero.elements?.primaryButton || {})
+      },
+      secondaryButton: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.secondaryButton,
+        ...(rawHero.elements?.secondaryButton || {})
+      },
+      ambientAudio: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.ambientAudio,
+        ...(rawHero.elements?.ambientAudio || {})
+      },
+      scrollIndicator: {
+        ...DEFAULT_STORE_SETTINGS.hero.elements.scrollIndicator,
+        ...(rawHero.elements?.scrollIndicator || {})
+      }
+    }
+  };
+
+  // 4. Founder
+  const founder: FounderSettings = {
+    ...DEFAULT_STORE_SETTINGS.founder,
+    ...rawFounder,
+    items: (Array.isArray(rawFounder.items) && rawFounder.items.length > 0)
+      ? rawFounder.items
+      : DEFAULT_STORE_SETTINGS.founder.items
+  };
+
+  // 5. Dashboard Founder
+  const dashboardFounder: DashboardFounderSettings = {
+    ...DEFAULT_STORE_SETTINGS.dashboardFounder!,
+    ...rawDashboardFounder,
+    gallery: (Array.isArray(rawDashboardFounder.gallery) && rawDashboardFounder.gallery.length > 0)
+      ? rawDashboardFounder.gallery
+      : DEFAULT_STORE_SETTINGS.dashboardFounder?.gallery || []
+  };
+
+  // 6. Team
+  const team: TeamSettings = {
+    ...DEFAULT_STORE_SETTINGS.team!,
+    ...rawTeam,
+    members: (Array.isArray(rawTeam.members) && rawTeam.members.length > 0)
+      ? rawTeam.members
+      : DEFAULT_STORE_SETTINGS.team?.members || [],
+    panorama: {
+      ...DEFAULT_STORE_SETTINGS.team?.panorama,
+      ...(rawTeam.panorama || {})
+    }
+  };
+
+  // 7. Product Lines
+  const productLines: ProductLine[] = (Array.isArray(rawProductLines) && rawProductLines.length > 0)
+    ? rawProductLines
+    : DEFAULT_STORE_SETTINGS.productLines || [];
+
+  // 8. Delivery Experience
+  const deliveryExperience: DeliveryExperienceSettings = {
+    ...DEFAULT_STORE_SETTINGS.deliveryExperience!,
+    ...rawDeliveryExperience,
+    image: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.image,
+      ...(rawDeliveryExperience.image || {})
+    },
+    tagline: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.tagline,
+      ...(rawDeliveryExperience.tagline || {})
+    },
+    headline: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.headline,
+      ...(rawDeliveryExperience.headline || {})
+    },
+    description: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.description,
+      ...(rawDeliveryExperience.description || {})
+    },
+    primaryButton: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.primaryButton,
+      ...(rawDeliveryExperience.primaryButton || {})
+    },
+    secondaryButton: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.secondaryButton,
+      ...(rawDeliveryExperience.secondaryButton || {})
+    },
+    style: {
+      ...DEFAULT_STORE_SETTINGS.deliveryExperience?.style,
+      ...(rawDeliveryExperience.style || {})
+    }
+  };
+
+  // 9. Brand Quote
+  const brandQuote: BrandQuoteSettings = {
+    ...DEFAULT_STORE_SETTINGS.brandQuote!,
+    ...rawBrandQuote,
+    logo: {
+      ...DEFAULT_STORE_SETTINGS.brandQuote?.logo,
+      ...(rawBrandQuote.logo || {})
+    },
+    quote: {
+      ...DEFAULT_STORE_SETTINGS.brandQuote?.quote,
+      ...(rawBrandQuote.quote || {})
+    },
+    authorTagline: {
+      ...DEFAULT_STORE_SETTINGS.brandQuote?.authorTagline,
+      ...(rawBrandQuote.authorTagline || {})
+    },
+    background: {
+      ...DEFAULT_STORE_SETTINGS.brandQuote?.background,
+      ...(rawBrandQuote.background || {})
+    }
+  };
+
+  // 10. Footer
+  const footer: FooterSettings = {
+    ...DEFAULT_STORE_SETTINGS.footer!,
+    ...rawFooter,
+    brand: {
+      ...DEFAULT_STORE_SETTINGS.footer?.brand,
+      ...(rawFooter.brand || {}),
+      tagline: {
+        ...DEFAULT_STORE_SETTINGS.footer?.brand?.tagline,
+        ...(rawFooter.brand?.tagline || {})
+      },
+      origins: {
+        ...DEFAULT_STORE_SETTINGS.footer?.brand?.origins,
+        ...(rawFooter.brand?.origins || {})
+      }
+    },
+    columns: (Array.isArray(rawFooter.columns) && rawFooter.columns.length > 0)
+      ? rawFooter.columns
+      : DEFAULT_STORE_SETTINGS.footer?.columns || [],
+    socials: (Array.isArray(rawFooter.socials) && rawFooter.socials.length > 0)
+      ? rawFooter.socials
+      : DEFAULT_STORE_SETTINGS.footer?.socials || [],
+    bottom: {
+      ...DEFAULT_STORE_SETTINGS.footer?.bottom,
+      ...(rawFooter.bottom || {}),
+      artistSignature: {
+        ...DEFAULT_STORE_SETTINGS.footer?.bottom?.artistSignature,
+        ...(rawFooter.bottom?.artistSignature || {})
+      }
+    },
+    background: {
+      ...DEFAULT_STORE_SETTINGS.footer?.background,
+      ...(rawFooter.background || {})
+    }
+  };
+
+  // 11. Gift Presentation
+  const giftPresentation: GiftPresentationSettings = {
+    ...DEFAULT_STORE_SETTINGS.giftPresentation!,
+    ...rawGiftPresentation,
+    slides: (Array.isArray(rawGiftPresentation.slides) && rawGiftPresentation.slides.length > 0)
+      ? rawGiftPresentation.slides
+      : DEFAULT_STORE_SETTINGS.giftPresentation?.slides || [],
+    ribbon: {
+      ...DEFAULT_STORE_SETTINGS.giftPresentation?.ribbon,
+      ...(rawGiftPresentation.ribbon || {})
+    }
+  };
+
+  return {
+    general,
+    header,
+    hero,
+    founder,
+    dashboardFounder,
+    team,
+    productLines,
+    deliveryExperience,
+    brandQuote,
+    footer,
+    giftPresentation
+  };
+}
+
+/**
  * Busca a personalização da loja do Supabase (tabela store_customization)
  */
 export async function fetchStoreSettingsFromSupabase(): Promise<StoreCustomizationSettings | null> {
@@ -206,23 +504,7 @@ export async function fetchStoreSettingsFromSupabase(): Promise<StoreCustomizati
 
     if (!data) return null;
 
-    // Normaliza os campos que vêm em snake_case, camelCase ou armazenados no general
-    const generalData = data.general || DEFAULT_STORE_SETTINGS.general;
-    const fetched: StoreCustomizationSettings = {
-      general: generalData,
-      header: data.header || DEFAULT_STORE_SETTINGS.header,
-      hero: data.hero || DEFAULT_STORE_SETTINGS.hero,
-      founder: data.founder || DEFAULT_STORE_SETTINGS.founder,
-      dashboardFounder: data.dashboard_founder || data.dashboardFounder || generalData?.dashboardFounder || DEFAULT_STORE_SETTINGS.dashboardFounder,
-      team: data.team || DEFAULT_STORE_SETTINGS.team,
-      productLines: data.product_lines || data.productLines || DEFAULT_STORE_SETTINGS.productLines,
-      deliveryExperience: data.delivery_experience || data.deliveryExperience || DEFAULT_STORE_SETTINGS.deliveryExperience,
-      brandQuote: data.brand_quote || data.brandQuote || DEFAULT_STORE_SETTINGS.brandQuote,
-      footer: data.footer || DEFAULT_STORE_SETTINGS.footer,
-      giftPresentation: data.gift_presentation || data.giftPresentation || generalData?.giftPresentation || DEFAULT_STORE_SETTINGS.giftPresentation
-    };
-
-    return fetched;
+    return deepMergeStoreSettings(data);
   } catch (err) {
     console.error('[Supabase] Exceção ao carregar store_customization:', err);
     return null;
@@ -239,25 +521,27 @@ export async function saveStoreSettingsToSupabase(settings: StoreCustomizationSe
   }
 
   try {
+    const fullSettings = deepMergeStoreSettings(settings);
+
     const generalWithExtras = {
-      ...(settings.general || {}),
-      giftPresentation: settings.giftPresentation || undefined,
-      dashboardFounder: settings.dashboardFounder || undefined
+      ...(fullSettings.general || {}),
+      giftPresentation: fullSettings.giftPresentation || undefined,
+      dashboardFounder: fullSettings.dashboardFounder || undefined
     };
 
     let payload: Record<string, any> = {
       id: 'current',
       general: generalWithExtras,
-      header: settings.header,
-      hero: settings.hero,
-      founder: settings.founder,
-      dashboard_founder: settings.dashboardFounder || null,
-      team: settings.team || null,
-      product_lines: settings.productLines || [],
-      delivery_experience: settings.deliveryExperience || null,
-      brand_quote: settings.brandQuote || null,
-      footer: settings.footer || null,
-      gift_presentation: settings.giftPresentation || null,
+      header: fullSettings.header,
+      hero: fullSettings.hero,
+      founder: fullSettings.founder,
+      dashboard_founder: fullSettings.dashboardFounder || null,
+      team: fullSettings.team || null,
+      product_lines: fullSettings.productLines || [],
+      delivery_experience: fullSettings.deliveryExperience || null,
+      brand_quote: fullSettings.brandQuote || null,
+      footer: fullSettings.footer || null,
+      gift_presentation: fullSettings.giftPresentation || null,
       updated_at: new Date().toISOString()
     };
 
@@ -615,19 +899,7 @@ export function subscribeToStoreSettingsRealtime(
         if (payload.new && typeof payload.new === 'object') {
           const raw: any = payload.new;
           if (raw.id === 'current' || !raw.id) {
-            const updated: StoreCustomizationSettings = {
-              general: raw.general || DEFAULT_STORE_SETTINGS.general,
-              header: raw.header || DEFAULT_STORE_SETTINGS.header,
-              hero: raw.hero || DEFAULT_STORE_SETTINGS.hero,
-              founder: raw.founder || DEFAULT_STORE_SETTINGS.founder,
-              dashboardFounder: raw.dashboard_founder || raw.dashboardFounder || DEFAULT_STORE_SETTINGS.dashboardFounder,
-              team: raw.team || DEFAULT_STORE_SETTINGS.team,
-              productLines: raw.product_lines || raw.productLines || DEFAULT_STORE_SETTINGS.productLines,
-              deliveryExperience: raw.delivery_experience || raw.deliveryExperience || DEFAULT_STORE_SETTINGS.deliveryExperience,
-              brandQuote: raw.brand_quote || raw.brandQuote || DEFAULT_STORE_SETTINGS.brandQuote,
-              footer: raw.footer || DEFAULT_STORE_SETTINGS.footer,
-              giftPresentation: raw.gift_presentation || raw.giftPresentation || DEFAULT_STORE_SETTINGS.giftPresentation
-            };
+            const updated = deepMergeStoreSettings(raw);
             callback(updated);
           }
         }

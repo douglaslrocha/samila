@@ -1,6 +1,3 @@
-
-
-
 -- =========================================================================
 -- MAISON ENTRELAÇO - ESQUEMA DO BANCO DE DADOS SUPABASE (POSTGRESQL)
 -- 
@@ -12,7 +9,8 @@
 -- 5. Políticas de Row Level Security (RLS) seguras
 -- 6. Permissões de acesso (Grants)
 -- 7. Publicação segura no canal supabase_realtime
--- 8. Carga inicial de dados autorais (Seeds)
+-- 8. Buckets e políticas de armazenamento público (Storage)
+-- 9. Carga inicial e reinicialização completa de dados (Seeds sem dados chumbados)
 -- =========================================================================
 
 -- 1. EXTENSÕES DO POSTGRESQL
@@ -28,10 +26,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-/* 3. ESTRUTURAÇÃO DAS TABELAS */
+/* 3. ESTRUTURAÇÃO E CRIAÇÃO LIMPA DAS TABELAS (RESET COMPLETO AUTORIZADO) */
 
--- TABELA 1: store_customization (Personalização Geral da Home, Marca e Fundadora)
-CREATE TABLE IF NOT EXISTS public.store_customization (
+-- Remove tabelas e restrições legadas para permitir recreação 100% limpa sem erros de constraint ou tipos antigos
+DROP TABLE IF EXISTS public.product_reviews CASCADE;
+DROP TABLE IF EXISTS public.contact_messages CASCADE;
+DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.coupons CASCADE;
+DROP TABLE IF EXISTS public.product_lines CASCADE;
+DROP TABLE IF EXISTS public.hero_slides CASCADE;
+DROP TABLE IF EXISTS public.products CASCADE;
+DROP TABLE IF EXISTS public.store_customization CASCADE;
+
+-- TABELA 1: store_customization (Personalização Geral da Home, Marca, Fundadora e Apresentação)
+CREATE TABLE public.store_customization (
   id TEXT PRIMARY KEY DEFAULT 'current',
   general JSONB NOT NULL DEFAULT '{}'::jsonb,
   header JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -43,13 +51,10 @@ CREATE TABLE IF NOT EXISTS public.store_customization (
   delivery_experience JSONB NOT NULL DEFAULT '{}'::jsonb,
   brand_quote JSONB NOT NULL DEFAULT '{}'::jsonb,
   footer JSONB NOT NULL DEFAULT '{}'::jsonb,
+  gift_presentation JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Migrações graduais de colunas caso a tabela já exista
-ALTER TABLE public.store_customization ADD COLUMN IF NOT EXISTS general JSONB NOT NULL DEFAULT '{}'::jsonb;
-ALTER TABLE public.store_customization ADD COLUMN IF NOT EXISTS dashboard_founder JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 DROP TRIGGER IF EXISTS trigger_store_customization_updated_at ON public.store_customization;
 CREATE TRIGGER trigger_store_customization_updated_at
@@ -57,32 +62,29 @@ CREATE TRIGGER trigger_store_customization_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION set_updated_at();
 
--- TABELA 2: products (Catálogo de Produtos Artesanais de Luxo)
-CREATE TABLE IF NOT EXISTS public.products (
+-- TABELA 2: products (Catálogo Completo de Produtos de Luxo)
+CREATE TABLE public.products (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('velas', 'sabonetes', 'croche', 'edicoes_especiais', 'outro')),
-  category_label TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('casa-manteau', 'casa-rituais', 'casa-objets')),
+  category_label TEXT NOT NULL DEFAULT '',
   price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
   short_story TEXT,
   full_story TEXT,
-  primary_image TEXT NOT NULL,
+  primary_image TEXT NOT NULL DEFAULT '',
   secondary_image TEXT,
   gallery_images TEXT[] DEFAULT ARRAY[]::TEXT[],
   video_url TEXT,
   details TEXT[] DEFAULT ARRAY[]::TEXT[],
-  fragrance_notes JSONB DEFAULT '{}'::jsonb,
+  fragrance_notes TEXT,
   materials TEXT[] DEFAULT ARRAY[]::TEXT[],
   dimensions TEXT,
   care_instructions TEXT,
   recently_sold_out BOOLEAN NOT NULL DEFAULT FALSE,
-  stock_quantity INTEGER NOT NULL DEFAULT 50 CHECK (stock_quantity >= 0),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-ALTER TABLE public.products ADD COLUMN IF NOT EXISTS recently_sold_out BOOLEAN NOT NULL DEFAULT FALSE;
 
 DROP TRIGGER IF EXISTS trigger_products_updated_at ON public.products;
 CREATE TRIGGER trigger_products_updated_at
@@ -92,18 +94,22 @@ CREATE TRIGGER trigger_products_updated_at
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
 CREATE INDEX IF NOT EXISTS idx_products_is_active ON public.products(is_active);
-CREATE INDEX IF NOT EXISTS idx_products_price ON public.products(price);
 
--- TABELA 3: hero_slides (Slides Multimídia em Alta Resolução da Hero Section)
+-- TABELA 3: hero_slides (Carrossel Cinematográfico da Home)
 CREATE TABLE IF NOT EXISTS public.hero_slides (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('video', 'image')),
-  title TEXT,
-  desktop_url TEXT NOT NULL,
-  mobile_url TEXT,
-  poster_url TEXT NOT NULL,
+  media_type TEXT NOT NULL CHECK (media_type IN ('image', 'video')),
+  media_url TEXT NOT NULL,
+  mobile_media_url TEXT,
+  alt_text TEXT NOT NULL,
+  tagline TEXT NOT NULL,
+  headline TEXT NOT NULL,
+  subtitle TEXT NOT NULL,
+  button_text TEXT NOT NULL,
+  button_link TEXT NOT NULL,
+  secondary_button_text TEXT,
+  secondary_button_link TEXT,
   order_index INTEGER NOT NULL DEFAULT 0,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -114,13 +120,9 @@ CREATE TRIGGER trigger_hero_slides_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_hero_slides_order ON public.hero_slides(order_index ASC);
-
--- TABELA 4: product_lines (As Três Casas & Coleções Especiais)
+-- TABELA 4: product_lines (As Três Casas da Maison)
 CREATE TABLE IF NOT EXISTS public.product_lines (
   id TEXT PRIMARY KEY,
-  roman TEXT NOT NULL,
-  house_prefix TEXT DEFAULT 'CASA',
   maison_title TEXT DEFAULT 'MAISON ENTRELAÇO',
   main_title TEXT NOT NULL,
   sub_title TEXT NOT NULL,
@@ -304,526 +306,61 @@ BEGIN
   END LOOP;
 END $$;
 
-/* 8. CARGA INICIAL DE DADOS AUTORAIS (SEEDS) */
-
--- Seed 1: store_customization
-INSERT INTO public.store_customization (
-  id, general, header, hero, founder, dashboard_founder, team, product_lines, delivery_experience, brand_quote, footer
-) VALUES (
-  'current',
-  '{
-    "storeName": "Maison Entrelaço",
-    "monogram": "ME",
-    "tagline": "Atelier de Criação Autoral • Velas, Sabonetes & Arte Botânica",
-    "whatsappNumber": "5511987654321",
-    "whatsappDefaultMessage": "Olá! Vim pelo site da {storeName} e gostaria de informações sobre os produtos e encomendas.",
-    "supportEmail": "atendimento@maisonentrelaco.com.br",
-    "instagramHandle": "@maisonentrelaço",
-    "cnpjOrDocument": "00.000.000/0001-00",
-    "addressCity": "São Paulo - SP"
-  }'::jsonb,
-  '{
-    "announcementBar": {
-      "enabled": true,
-      "text": "Edição de Outono do Atelier • Embalagem para presente em papel vegetal e lacre em cera inclusa",
-      "linkText": "Descobrir",
-      "linkUrl": "#tres-casas",
-      "bgColor": "#3D3229",
-      "textColor": "#F7F4EF"
-    },
-    "logo": {
-      "type": "image",
-      "text": "MAISON ENTRELAÇO",
-      "monogram": "ME",
-      "sealTopText": "MAISON",
-      "sealBottomText": "ENTRELAÇO",
-      "imageUrl": "/images/maison-logo.svg",
-      "size": "md"
-    },
-    "actions": { "showSearch": true, "showAccount": true, "showCart": true },
-    "style": { "sticky": true, "backdropBlur": true, "theme": "classic_cream" },
-    "navLinks": [
-      { "id": "velas", "label": "Velas Aromáticas", "enabled": true, "targetId": "velas", "targetType": "line" },
-      { "id": "sabonetes", "label": "Sabonetes Botânicos", "enabled": true, "targetId": "sabonetes", "targetType": "line" },
-      { "id": "croche", "label": "Peças em Crochê", "enabled": true, "targetId": "croche", "targetType": "line" }
-    ]
-  }'::jsonb,
-  '{
-    "mediaMode": "both",
-    "height": "full",
-    "overlay": { "enabled": true, "intensity": "subtle", "vignette": true },
-    "alignment": "center",
-    "carouselAutoplay": true,
-    "carouselInterval": 6,
-    "slides": [
-      {
-        "id": "slide-1",
-        "type": "video",
-        "title": "Cortinas ao Sol & Arquitetura do Atelier",
-        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-curtains-moving-with-the-breeze-in-a-sunny-room-41584-large.mp4",
-        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-curtains-moving-with-the-breeze-in-a-sunny-room-41584-large.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=2000&q=90"
-      },
-      {
-        "id": "slide-2",
-        "type": "image",
-        "title": "Casa I • Velas Aromáticas & Cera Vegetal",
-        "desktopUrl": "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=2000&q=90",
-        "mobileUrl": "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=1080&q=90",
-        "posterUrl": "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=2000&q=90"
-      },
-      {
-        "id": "slide-3",
-        "type": "video",
-        "title": "Chama Viva & Fusão das Ceras",
-        "desktopUrl": "https://assets.mixkit.co/videos/preview/mixkit-top-view-of-a-candle-flame-41580-large.mp4",
-        "mobileUrl": "https://assets.mixkit.co/videos/preview/mixkit-top-view-of-a-candle-flame-41580-large.mp4",
-        "posterUrl": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=2000&q=90"
-      },
-      {
-        "id": "slide-4",
-        "type": "image",
-        "title": "Casa II • Sabonetes Botânicos de Oliva & Camomila",
-        "desktopUrl": "https://images.unsplash.com/photo-1607006310458-0059b0d2d31e?auto=format&fit=crop&w=2000&q=90",
-        "mobileUrl": "https://images.unsplash.com/photo-1607006310458-0059b0d2d31e?auto=format&fit=crop&w=1080&q=90",
-        "posterUrl": "https://images.unsplash.com/photo-1607006310458-0059b0d2d31e?auto=format&fit=crop&w=2000&q=90"
-      },
-      {
-        "id": "slide-5",
-        "type": "image",
-        "title": "Casa III • Crochê Artesanal em Fio Nobre de Algodão",
-        "desktopUrl": "https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=2000&q=90",
-        "mobileUrl": "https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=1080&q=90",
-        "posterUrl": "https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=2000&q=90"
-      }
-    ],
-    "desktopMedia": {
-      "type": "video",
-      "url": "https://assets.mixkit.co/videos/preview/mixkit-curtains-moving-with-the-breeze-in-a-sunny-room-41584-large.mp4",
-      "posterUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=2000&q=90"
-    },
-    "mobileMedia": {
-      "useSeparateMedia": true,
-      "type": "video",
-      "url": "https://assets.mixkit.co/videos/preview/mixkit-curtains-moving-with-the-breeze-in-a-sunny-room-41584-large.mp4",
-      "posterUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1080&q=90"
-    },
-    "elements": {
-      "tagline": { "enabled": false, "text": "Uma casa feita de histórias.", "icon": true },
-      "headline": { "enabled": false, "text": "Objetos para perfumar, cuidar e vestir a vida de beleza.", "size": "large" },
-      "subtitle": { "enabled": false, "text": "Europa monárquica · Botânica nobre · Feito à mão" },
-      "primaryButton": { "enabled": false, "text": "Descobrir as Três Casas", "action": "tres-casas" },
-      "secondaryButton": { "enabled": false, "text": "O Saber-Fazer Artesanal", "action": "atelier" },
-      "ambientAudio": { "enabled": false, "label": "Som da Maison" },
-      "scrollIndicator": { "enabled": false, "label": "Role" }
-    }
-  }'::jsonb,
-  '{
-    "enabled": true,
-    "tagline": "A Alma da Maison",
-    "name": "Aline de La Tour",
-    "role": "Fundadora & Diretora Criativa",
-    "badgeText": "Autoria",
-    "itemsTitle": "Pilares da Criação",
-    "imageUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1000&q=85",
-    "imageAlt": "Aline de La Tour, fundadora da Maison",
-    "items": [
-      { "id": "1", "title": "Curadoria Autoral", "description": "Cada fragrância e objeto nasce de memórias de estadias na Europa e casarões coloniais." },
-      { "id": "2", "title": "Saber-Fazer Nobre", "description": "Alquimia botânica pura, óleos nobres e entrelaçado manual feito com tempo e calma." },
-      { "id": "3", "title": "Tiragens Raras", "description": "Objetos de afeto intencionalmente esculpidos para guardar a beleza dos dias." }
-    ],
-    "quote": "O luxo autêntico é o afeto e o tempo lapidados à mão.",
-    "buttonText": "Conheça a história"
-  }'::jsonb,
-  '{
-    "enabled": true,
-    "ownerName": "Aline de La Tour",
-    "ownerRole": "Fundadora & Diretora Criativa",
-    "welcomeMessage": "Mesa de Criação & Atelier da Fundadora",
-    "quote": "O luxo autêntico é o afeto e o tempo lapidados à mão.",
-    "heroBgImage": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1600&q=85",
-    "sidebarAvatarImage": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=85",
-    "gallery": [
-      {
-        "id": "df-1",
-        "url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1200&q=85",
-        "title": "Retrato Principal da Criadora",
-        "caption": "Fotografia autoral de luz natural da fundadora",
-        "createdAt": "2025-01-10"
-      },
-      {
-        "id": "df-2",
-        "url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=85",
-        "title": "No Atelier em Dia de Alquimia",
-        "caption": "Seleção botânica e infusões aromáticas artesanais",
-        "createdAt": "2025-02-14"
-      },
-      {
-        "id": "df-3",
-        "url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=85",
-        "title": "Curadoria de Fios Nobres",
-        "caption": "Estudo do entrelaçado manual e embalagens em linho",
-        "createdAt": "2025-03-01"
-      }
-    ]
-  }'::jsonb,
-  '{
-    "enabled": true,
-    "headline": "EVOLUA A SUA CASA",
-    "subtitle": "ARTE BOTÂNICA, VELAS PURAS & CRIAÇÕES MANUAIS",
-    "showCraftIcons": true,
-    "members": [
-      {
-        "id": "member-1",
-        "name": "Yusuf O.",
-        "role": "Head Of Engineering",
-        "imageUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=600&q=85",
-        "imageAlt": "Yusuf O. - Head Of Engineering",
-        "isGrayscale": false
-      },
-      {
-        "id": "member-2",
-        "name": "Kemal O.",
-        "role": "Founder & CEO",
-        "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=85",
-        "imageAlt": "Kemal O. - Founder & CEO",
-        "isGrayscale": false
-      },
-      {
-        "id": "member-3",
-        "name": "Berkay K.",
-        "role": "Developer",
-        "imageUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=85",
-        "imageAlt": "Berkay K. - Developer",
-        "isGrayscale": true
-      }
-    ],
-    "panorama": {
-      "enabled": true,
-      "imageUrl": "/images/mansoes-luxo-panoramica.png",
-      "alt": "Panorama de Mansões Modernas de Luxo"
-    }
-  }'::jsonb,
-  '[
-    {
-      "id": "velas",
-      "roman": "I",
-      "housePrefix": "CASA",
-      "maisonTitle": "MAISON ENTRELAÇO",
-      "mainTitle": "O aroma rico",
-      "subTitle": "Velas aromáticas",
-      "watermarkWords": ["AROMA RICO", "VERSAILLES"],
-      "defaultBadge1": "Cera 100% Vegetal",
-      "defaultBadge2": "50h Queima",
-      "bgColor": "from-[#FAF8F5] via-[#FAF6F0] to-[#F5EFE6]",
-      "fadeColor": "#FAF8F5"
-    },
-    {
-      "id": "sabonetes",
-      "roman": "II",
-      "housePrefix": "CASA",
-      "maisonTitle": "MAISON ENTRELAÇO",
-      "mainTitle": "O cuidado",
-      "subTitle": "Sabonetes botânicos",
-      "watermarkWords": ["O CUIDADO", "BOTÂNICA"],
-      "defaultBadge1": "Cold Process",
-      "defaultBadge2": "Óleos Puros",
-      "bgColor": "from-[#F5EFE6] via-[#F4EFE6] to-[#EFE7DC]",
-      "fadeColor": "#F5EFE6"
-    },
-    {
-      "id": "croche",
-      "roman": "III",
-      "housePrefix": "CASA",
-      "maisonTitle": "MAISON ENTRELAÇO",
-      "mainTitle": "A trama",
-      "subTitle": "Peças em crochê",
-      "watermarkWords": ["A TRAMA", "HERANÇA"],
-      "defaultBadge1": "Algodão Nobre",
-      "defaultBadge2": "Ponto Manual",
-      "bgColor": "from-[#EFE7DC] via-[#F6F1EA] to-[#FAF8F5]",
-      "fadeColor": "#EFE7DC"
-    }
-  ]'::jsonb,
-  '{
-    "enabled": true,
-    "image": {
-      "enabled": true,
-      "url": "/images/atelier-decoracao-panoramica.png",
-      "alt": "Arte Panorâmica da Maison",
-      "maxHeight": "full",
-      "blendMode": "multiply"
-    },
-    "tagline": { "enabled": true, "text": "Boutique Online" },
-    "headline": { "enabled": true, "text": "“Coloque no seu carrinho e receba na sua casa.”" },
-    "description": { "enabled": true, "text": "Preparamos cada encomenda como quem envia uma carta de afeto — com perfume autoral, toque humano e entrega sem pressa." },
-    "primaryButton": { "enabled": true, "text": "Escolher Meus Produtos", "action": "explore_products" },
-    "secondaryButton": { "enabled": true, "text": "Ver Meu Carrinho", "action": "open_cart" },
-    "style": { "bgColor": "#FAF7F2" }
-  }'::jsonb,
-  '{
-    "enabled": true,
-    "logo": {
-      "enabled": true,
-      "type": "monogram",
-      "monogramText": "M",
-      "imageUrl": "",
-      "size": "md"
-    },
-    "quote": {
-      "enabled": true,
-      "text": "“Há coisas que não precisam ser explicadas. Basta senti-las.”",
-      "textColor": "#3D3229",
-      "fontSize": "lg"
-    },
-    "authorTagline": {
-      "enabled": true,
-      "text": "MAISON ENTRELAÇO — ATEMPORALIDADE & SENTIDO",
-      "textColor": "#7A5B43"
-    },
-    "background": {
-      "type": "video",
-      "mediaUrl": "https://assets.mixkit.co/videos/preview/mixkit-curtains-moving-with-the-breeze-in-a-sunny-room-41584-large.mp4",
-      "posterUrl": "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?auto=format&fit=crop&w=2000&q=90",
-      "overlayColor": "#E8E0D4",
-      "overlayOpacity": 88,
-      "blur": 2
-    },
-    "paddingY": "normal"
-  }'::jsonb,
-  '{
-    "enabled": true,
-    "brand": {
-      "displayType": "name",
-      "nameText": "MAISON ENTRELAÇO",
-      "logoUrl": "",
-      "logoHeight": 32,
-      "tagline": {
-        "enabled": true,
-        "text": "“Uma casa feita de histórias. Objetos para perfumar, cuidar e vestir a vida de beleza.”"
-      },
-      "origins": {
-        "enabled": true,
-        "text": "FRANÇA • ITÁLIA • BRASIL"
-      }
-    },
-    "columns": [
-      {
-        "id": "col-maison",
-        "title": "A MAISON",
-        "items": [
-          { "id": "item-1", "label": "A Fundadora", "actionType": "scroll", "target": "a-maison" },
-          { "id": "item-2", "label": "Boutique Online", "actionType": "scroll", "target": "secao-carrinho-casa" },
-          { "id": "item-3", "label": "As Três Casas", "actionType": "scroll", "target": "tres-casas" }
-        ]
-      },
-      {
-        "id": "col-colecoes",
-        "title": "COLEÇÕES",
-        "items": [
-          { "id": "item-4", "label": "Velas Aromáticas", "actionType": "scroll", "target": "velas" },
-          { "id": "item-5", "label": "Sabonetes Botânicos", "actionType": "scroll", "target": "sabonetes" },
-          { "id": "item-6", "label": "Crochê Feito à Mão", "actionType": "scroll", "target": "croche" },
-          { "id": "item-7", "label": "Edições Limitadas", "actionType": "scroll", "target": "produtos" }
-        ]
-      },
-      {
-        "id": "col-atendimento",
-        "title": "ATENDIMENTO",
-        "items": [
-          { "id": "item-8", "label": "Personalizado", "actionType": "contact" },
-          { "id": "item-9", "label": "Encomendas", "actionType": "contact" },
-          { "id": "item-10", "label": "Entregas & Prazos", "actionType": "contact" }
-        ]
-      },
-      {
-        "id": "col-conecte",
-        "title": "CONECTE-SE",
-        "items": [
-          { "id": "item-11", "label": "Fale Conosco", "actionType": "contact" }
-        ]
-      }
-    ],
-    "socials": [
-      {
-        "id": "soc-instagram",
-        "network": "instagram",
-        "handle": "@maisonentrelaço"
-      }
-    ],
-    "bottom": {
-      "copyright": "© Maison Entrelaço • Todos os direitos reservados.",
-      "loveMessage": "Feito lentamente com ♥ para inspirar o viver.",
-      "artistSignature": {
-        "enabled": true,
-        "prefix": "Planejado pelo artista",
-        "artistName": "Douglas L. Rocha",
-        "websiteUrl": "https://douglaslrocha.com",
-        "websiteLabel": "douglaslrocha.com",
-        "signatureUrl": "https://chatgpt.com/s/m_6aa57170bf548191bad414e48113190e",
-        "style": "handwritten"
-      }
-    },
-    "background": {
-      "type": "video",
-      "mediaUrl": "https://assets.mixkit.co/videos/preview/mixkit-night-sky-full-of-stars-41582-large.mp4",
-      "posterUrl": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=2000&q=90",
-      "overlayColor": "#1C1714",
-      "overlayOpacity": 90
-    }
-  }'::jsonb
-)
-ON CONFLICT (id) DO UPDATE SET
-  general = EXCLUDED.general,
-  header = EXCLUDED.header,
-  hero = EXCLUDED.hero,
-  founder = EXCLUDED.founder,
-  dashboard_founder = EXCLUDED.dashboard_founder,
-  team = EXCLUDED.team,
-  product_lines = EXCLUDED.product_lines,
-  delivery_experience = EXCLUDED.delivery_experience,
-  brand_quote = EXCLUDED.brand_quote,
-  footer = EXCLUDED.footer,
-  updated_at = NOW();
-
--- Seed 2: products (Catálogo Completo da Maison Entrelaço)
-INSERT INTO public.products (
-  id, name, category, category_label, price, short_story, full_story,
-  primary_image, secondary_image, gallery_images, video_url, details,
-  fragrance_notes, materials, dimensions, care_instructions, stock_quantity, is_active
-) VALUES
-(
-  'vela-jardim-versailles',
-  'Vela — Jardim de Versailles',
-  'velas',
-  'Vela Aromática em Porcelana',
-  189.00,
-  'Uma fragrância inspirada nas manhãs primaveris dos jardins franceses, com notas de flor de laranjeira, musgo sagrado e bergamota real.',
-  'Esta vela evoca a caminhada solitária pelos alamedas de Versailles logo ao alvorecer, quando o orvalho ainda repousa sobre as pétalas e a brisa traz o aroma límpido da terra úmida entrelaçada às flores nobres.',
-  'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=1000&q=85',
-  'https://images.unsplash.com/photo-1572726729986-7a1362e0c1f5?auto=format&fit=crop&w=1000&q=85',
-  ARRAY[
-    'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=1000&q=85',
-    'https://images.unsplash.com/photo-1572726729986-7a1362e0c1f5?auto=format&fit=crop&w=1000&q=85',
-    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1000&q=85'
-  ],
-  'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-candle-in-a-dark-room-42880-large.mp4',
-  ARRAY[
-    'Cera vegetal de coco, arroz e palma',
-    'Pavio duplo de algodão e madeira nobre',
-    'Pote de cerâmica artesanal reutilizável',
-    'Tempo de queima estimado: 50 horas'
-  ],
-  '{"top": "Bergamota Real & Néroli de Grasse", "heart": "Flor de Laranjeira & Rosa Damascena", "base": "Musgo de Carvalho & Âmbar Dourado"}'::jsonb,
-  ARRAY['Porcelana biscuit', 'Cera vegetal pura', 'Óleos essenciais franceses'],
-  '9cm x 8cm • 220g',
-  'Apare o pavio a 5mm antes de reacender. Deixe a cera derreter até a borda na primeira queima.',
-  45,
-  true
-),
-(
-  'sabonete-pedras-loire',
-  'Sabonete — Pedras do Loire',
-  'sabonetes',
-  'Sabonete Botânico Mineral',
-  94.00,
-  'Infusionado com argila branca purificante, manteiga de karité e infusão de camomila romana para uma espuma aveludada.',
-  'Formulado artesanalmente pelo método de saponificação a frio (cold process), este sabonete descansa por 6 semanas no atelier para alcançar a densidade perfeita e preservar as propriedades calmantes das botânicas europeias.',
-  'https://images.unsplash.com/photo-1607006482172-43093b5847e7?auto=format&fit=crop&w=1000&q=85',
-  'https://images.unsplash.com/photo-1600857544200-b2f666a9a2ec?auto=format&fit=crop&w=1000&q=85',
-  ARRAY[
-    'https://images.unsplash.com/photo-1607006482172-43093b5847e7?auto=format&fit=crop&w=1000&q=85',
-    'https://images.unsplash.com/photo-1600857544200-b2f666a9a2ec?auto=format&fit=crop&w=1000&q=85'
-  ],
-  NULL,
-  ARRAY[
-    'Método artesanal Cold Process (6 semanas de cura)',
-    '100% livre de sulfatos e derivados de petróleo',
-    'Aroma natural obtido exclusivamente de óleos essenciais'
-  ],
-  '{"top": "Lavanda Fina & Menta Suave", "heart": "Camomila Romana & Gerânio", "base": "Cedro Branco & Baunilha Botânica"}'::jsonb,
-  ARRAY['Azeite de oliva extravirgem', 'Manteiga de karité pura', 'Argila branca mineral'],
-  '8cm x 5cm x 3cm • 140g',
-  'Manter em saboneteira drenada para maior durabilidade.',
-  60,
-  true
-),
-(
-  'sousplat-heranca-florenca',
-  'Sousplat — Herança de Florença',
-  'croche',
-  'Peça em Crochê Nobre',
-  148.00,
-  'Entrelaçado à mão em fio nobre de algodão cru com padrão filigrana inspirado nos tetos renascentistas toscanos.',
-  'Cada sousplat demanda 7 horas de dedicação exclusiva de nossas artesãs. Uma peça concebida para atravessar gerações, transformando qualquer refeição em celebração de presença.',
-  'https://images.unsplash.com/photo-1615800001619-4c670355f69e?auto=format&fit=crop&w=1000&q=85',
-  'https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=1000&q=85',
-  ARRAY[
-    'https://images.unsplash.com/photo-1615800001619-4c670355f69e?auto=format&fit=crop&w=1000&q=85',
-    'https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=1000&q=85'
-  ],
-  NULL,
-  ARRAY[
-    'Fio nobre 100% algodão brasileiro penteado',
-    'Ponto filigrana exclusivo desenvolvido no atelier',
-    'Engomado suave com amido de milho natural'
-  ],
-  NULL,
-  ARRAY['Algodão egípcio penteado', 'Amido vegetal natural'],
-  '38cm de diâmetro',
-  'Lavar à mão com sabão neutro. Secar na horizontal sobre uma toalha plana.',
-  30,
-  true
-)
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  category = EXCLUDED.category,
-  price = EXCLUDED.price,
-  primary_image = EXCLUDED.primary_image,
-  stock_quantity = EXCLUDED.stock_quantity,
-  is_active = EXCLUDED.is_active,
-  updated_at = NOW();
-
--- Seed 3: coupons (Cupons Iniciais de Boas-Vindas)
-INSERT INTO public.coupons (
-  id, code, discount_type, discount_value, min_order_amount, max_uses, is_active
-) VALUES
-  ('cupom-bem-vinda', 'BEMVINDA10', 'percentage', 10.00, 150.00, 500, true),
-  ('cupom-maison-afeto', 'AFETO15', 'percentage', 15.00, 300.00, 200, true),
-  ('cupom-frete-gratis', 'MAISONFRETE', 'fixed', 35.00, 250.00, 100, true)
+/* 8. BUCKETS E POLÍTICAS DE ARMAZENAMENTO PÚBLICO (SUPABASE STORAGE) */
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('maison-assets', 'maison-assets', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Seed 4: product_reviews (Depoimentos Iniciais da Boutique)
-INSERT INTO public.product_reviews (
-  product_id, author_name, author_city, rating, title, comment, is_verified_buyer, is_featured
-) VALUES
-(
-  'vela-jardim-versailles',
-  'Helena M. Albuquerque',
-  'São Paulo, SP',
-  5,
-  'Uma experiência sensorial incomparável',
-  'O perfume preenche a sala de forma elegante e discreta. A porcelana é tão linda que virou peça permanente na minha mesa de centro.',
-  true,
-  true
-),
-(
-  'sabonete-pedras-loire',
-  'Beatriz Fontes',
-  'Curitiba, PR',
-  5,
-  'Textura de veludo e toque de carinho',
-  'A espuma é densa e hidratante, não resseca a pele. O aroma de lavanda e camomila acalma o dia instantaneamente.',
-  true,
-  true
-),
-(
-  'sousplat-heranca-florenca',
-  'Camila V. Guimarães',
-  'Belo Horizonte, MG',
-  5,
-  'Arte pura em cada detalhe',
-  'O ponto do crochê é impecável. Dá para sentir o tempo e o cuidado colocado em cada centímetro da peça.',
-  true,
-  true
+DROP POLICY IF EXISTS "Public Storage Access maison-assets" ON storage.objects;
+CREATE POLICY "Public Storage Access maison-assets"
+ON storage.objects FOR ALL
+TO anon, authenticated, service_role
+USING (bucket_id = 'maison-assets')
+WITH CHECK (bucket_id = 'maison-assets');
+
+/* 9. CARGA INICIAL E REINICIALIZAÇÃO COMPLETA DE DADOS (APAGA DADOS CHUMBADOS ANTIGOS) */
+
+-- Apaga registros antigos "chumbados" ou parciais para garantir sincronização perfeita
+DELETE FROM public.store_customization;
+
+-- Insere o registro principal 'current' com o pacote completo de customização da loja
+INSERT INTO public.store_customization (
+  id,
+  general,
+  header,
+  hero,
+  founder,
+  dashboard_founder,
+  team,
+  product_lines,
+  delivery_experience,
+  brand_quote,
+  footer,
+  gift_presentation,
+  updated_at
+) VALUES (
+  'current',
+  '{"storeName":"MAISON ENTRELAÇO","monogram":"ME","tagline":"Alta Costura, Perfumaria Autoral & Rituais de Afeto","currencySymbol":"R$","shippingFlatRate":35,"freeShippingThreshold":350,"whatsappNumber":"5511999999999","whatsappDefaultMessage":"Olá! Gostaria de encomendar uma peça da Maison Entrelaço."}'::jsonb,
+  '{"announcementBar":{"enabled":true,"text":"✦ FRETE CORTESIA NAS COMPRAS ACIMA DE R$ 350 • EMBALAGEM DE PRESENTE INCLUSA","bgColor":"#3D2224","textColor":"#FAF6F2"},"logo":{"type":"text_monogram","imageUrl":"","text":"MAISON ENTRELAÇO","subtext":"Atelier de Luxo","monogram":"ME","height":42},"actions":{"showSearch":true,"showAccount":true,"showCart":true},"style":{"headerBgColor":"#FAF7F2","textColor":"#3D3229","accentColor":"#7A5B43","isSticky":true},"navLinks":[{"id":"tres-casas","label":"As Três Casas","href":"#tres-casas","targetSection":"tres-casas"},{"id":"produtos","label":"Obras & Coleções","href":"#produtos","targetSection":"produtos"},{"id":"secao-carrinho-casa","label":"Concierge","href":"#secao-carrinho-casa","targetSection":"secao-carrinho-casa"}]}'::jsonb,
+  '{"mediaMode":"slideshow","height":"h-[85vh] min-h-[580px] max-h-[820px]","overlay":{"opacity":35,"color":"#000000"},"alignment":"center","carouselAutoplay":true,"carouselInterval":6,"slides":[{"id":"s1","mediaType":"image","mediaUrl":"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=2000&q=85","mobileMediaUrl":"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1000&q=85","altText":"Maison Entrelaço • Atelier de Luxo","tagline":"Maison Entrelaço • Haute Couture","headline":"O Luxo Silencioso do Afeto Feito à Mão","subtitle":"Peças autorais, óleos raros e cerâmicas numeradas esculpidas com o tempo da delicadeza.","buttonText":"Explorar As Três Casas","buttonLink":"#tres-casas","secondaryButtonText":"A Alma da Maison","secondaryButtonLink":"#secao-carrinho-casa"},{"id":"s2","mediaType":"image","mediaUrl":"https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=2000&q=85","mobileMediaUrl":"https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1000&q=85","altText":"Velas Botânicas Autoriais","tagline":"Edições Numeradas & Curadoria Botânica","headline":"Rituais Aromáticos & Atmosferas Nobles","subtitle":"Aromas que despertam memórias profundas em frascos soprados artesanalmente.","buttonText":"Ver Coleções Aromáticas","buttonLink":"#produtos","secondaryButtonText":"Falar no WhatsApp","secondaryButtonLink":"#secao-carrinho-casa"}],"desktopMedia":{"mediaType":"image","url":"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=2000&q=85","alt":"Maison Entrelaço • Luxo Autoral"},"mobileMedia":{"mediaType":"image","url":"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1000&q=85","alt":"Maison Entrelaço • Luxo Autoral Mobile"},"elements":{"tagline":{"enabled":true,"text":"Maison Entrelaço • Haute Couture"},"headline":{"enabled":true,"text":"O Luxo Silencioso do Afeto Feito à Mão"},"subtitle":{"enabled":true,"text":"Peças autorais, óleos raros e cerâmicas numeradas esculpidas com o tempo da delicadeza."},"primaryButton":{"enabled":true,"text":"Explorar As Três Casas","link":"#tres-casas"},"secondaryButton":{"enabled":true,"text":"A Alma da Maison","link":"#secao-carrinho-casa"},"ambientAudio":{"enabled":false,"url":"","title":"Acordes de Poesia"},"scrollIndicator":{"enabled":true,"text":"Deslize para Descobrir"}}}'::jsonb,
+  '{"enabled":true,"tagline":"A Alma da Maison","name":"Aline de La Tour","role":"Fundadora & Diretora Criativa","badgeText":"Autoria","itemsTitle":"Pilares da Criação","imageUrl":"https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1000&q=85","imageAlt":"Aline de La Tour no Atelier","quote":"O luxo autêntico é o afeto e o tempo lapidados à mão.","buttonText":"Conheça a história","items":[{"id":"1","title":"Curadoria Autoral","description":"Nascida de estadias na Europa e memórias do interior bucólico."},{"id":"2","title":"Saber-Fazer Nobre","description":"Alquimia botânica pura, óleos raros e fios entrelaçados sem pressa."},{"id":"3","title":"Tiragens Raras","description":"Peças numeradas para transformar a rotina em rituais poéticos."}]}'::jsonb,
+  '{"enabled":true,"ownerName":"Aline de La Tour","ownerRole":"Fundadora & Diretora Criativa","welcomeMessage":"Bem-vinda ao Atelier Virtual, Aline","quote":"Cada detalhe criado à mão é um laço de afeto atemporal.","sidebarAvatarImage":"https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=85","gallery":["https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=85"]}'::jsonb,
+  '{"enabled":true,"headline":"Mestres do Saber-Fazer","subtitle":"Artisans dedicados à perfeição de cada costura, aroma e acabamento de luxo.","showCraftIcons":true,"members":[{"id":"m1","name":"Aline de La Tour","role":"Fundadora & Diretora Criativa","bio":"Curadoria autoral e direção olfativa das Três Casas.","photoUrl":"https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=85","craftBadge":"Alta Direção"},{"id":"m2","name":"Claire Dupont","role":"Mestre Manteau & Têxtil","bio":"Especialista em rendas de tear antigo e bordados em fio de seda.","photoUrl":"https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=800&q=85","craftBadge":"Têxtil de Luxo"},{"id":"m3","name":"Jean-Luc Vance","role":"Ceramista & Escultor","bio":"Modela frascos e pratos decorativos de cerâmica em alta temperatura.","photoUrl":"https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=85","craftBadge":"Cerâmica Nobre"}],"panorama":{"enabled":true,"imageUrl":"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1600&q=85","caption":"Nosso atelier central onde cada peça ganha vida em ritmo artesanal."}}'::jsonb,
+  '[{"id":"casa-manteau","maisonTitle":"MAISON ENTRELAÇO","mainTitle":"Casa Manteau","subTitle":"Texturas Nobres & Mantos de Aconchego","watermarkWords":["MANTEAU","SEDA","TRICOT","BORDADO"],"defaultBadge1":"Autoria Têxtil","defaultBadge2":"Alta Costura","bgColor":"bg-[#F7F4EF]","fadeColor":"from-[#F7F4EF]","customProductIds":[],"orderIndex":1},{"id":"casa-rituais","maisonTitle":"MAISON ENTRELAÇO","mainTitle":"Casa Rituais","subTitle":"Velas Botânicas & Perfumaria Autoral","watermarkWords":["BOTÂNICA","VELAS","ÓLEOS","ESSÊNCIA"],"defaultBadge1":"Curadoria Olfativa","defaultBadge2":"Alquimia Rara","bgColor":"bg-[#FAF7F2]","fadeColor":"from-[#FAF7F2]","customProductIds":[],"orderIndex":2},{"id":"casa-objets","maisonTitle":"MAISON ENTRELAÇO","mainTitle":"Casa Objets","subTitle":"Cerâmicas Numeradas & Adornos de Mesa","watermarkWords":["OBJETS","CERÂMICA","ESCULTURA","ARTE"],"defaultBadge1":"Edições Numeradas","defaultBadge2":"Feito à Mão","bgColor":"bg-[#F5F0E8]","fadeColor":"from-[#F5F0E8]","customProductIds":[],"orderIndex":3}]'::jsonb,
+  '{"enabled":true,"image":{"enabled":true,"url":"https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1400&q=85","alt":"Experiência de Entrega da Maison","maxHeight":"full","blendMode":"multiply"},"tagline":{"enabled":true,"text":"Boutique Online"},"headline":{"enabled":true,"text":"“Coloque no seu carrinho e receba na sua casa.”"},"description":{"enabled":true,"text":"Preparamos cada encomenda como quem envia uma carta de afeto — com perfume autoral, toque humano e entrega sem pressa."},"primaryButton":{"enabled":true,"text":"Escolher Meus Produtos","action":"explore_products"},"secondaryButton":{"enabled":true,"text":"Ver Meu Carrinho","action":"open_cart"},"style":{"bgColor":"#FAF7F2"}}'::jsonb,
+  '{"enabled":true,"logo":{"enabled":true,"type":"monogram","monogramText":"ME","imageUrl":"","size":"md"},"quote":{"enabled":true,"text":"“Há coisas que não precisam ser explicadas. Basta senti-las.”","textColor":"#3D3229","fontSize":"lg","fontStyle":"serif_italic"},"authorTagline":{"enabled":true,"text":"MAISON ENTRELAÇO • ATELIER DE ALTA COSTURA","textColor":"#7A5B43"},"background":{"type":"solid","solidColor":"#F4EBE1","gradientFrom":"#FAF7F2","gradientTo":"#F4EBE1","imageUrl":"","overlayOpacity":0}}'::jsonb,
+  '{"enabled":true,"brand":{"name":"MAISON ENTRELAÇO","tagline":{"enabled":true,"text":"Alta Costura, Perfumaria Autoral & Rituais de Afeto"},"origins":{"enabled":true,"text":"Atelier de Criação • Atendimento Personalizado"}},"columns":[{"id":"c1","title":"As Três Casas","links":[{"id":"l1","label":"Casa Manteau","href":"#tres-casas","targetSection":"tres-casas"},{"id":"l2","label":"Casa Rituais","href":"#tres-casas","targetSection":"tres-casas"},{"id":"l3","label":"Casa Objets","href":"#tres-casas","targetSection":"tres-casas"}]},{"id":"c2","title":"Atendimento","links":[{"id":"l4","label":"WhatsApp Concierge","href":"#secao-carrinho-casa","targetSection":"secao-carrinho-casa"},{"id":"l5","label":"Encomendas Especiais","href":"#secao-carrinho-casa","targetSection":"secao-carrinho-casa"}]}],"socials":[{"platform":"instagram","label":"Instagram","url":"https://instagram.com"},{"platform":"whatsapp","label":"WhatsApp","url":"https://wa.me/5511999999999"}],"bottom":{"copyrightText":"© 2026 Maison Entrelaço. Todos os direitos reservados.","artistSignature":{"enabled":true,"text":"Feito com amor & afeto"}},"background":{"bgColor":"#2B1A1B","textColor":"#FAF5EE"}}'::jsonb,
+  '{"slides":[{"id":"s1","mediaType":"image","mediaUrl":"https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=1200&q=85","badgeText":"Maison Entrelaço","title":"Seja Bem-Vinda ao Atelier","description":"Uma experiência de unboxing inesquecível criada para celebrar momentos especiais com toque humano e afeto.","buttonText":"Avançar para a Experiência"},{"id":"s2","mediaType":"image","mediaUrl":"https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=1200&q=85","badgeText":"Embalagem de Luxo","title":"O Ritual do Laço de Seda","description":"Cada peça é envolvida em papel de seda perfumado, acompanhada de cartão manuscrito e selo de cera nobre.","buttonText":"Abrir Presente Especial"}],"ribbon":{"color":"#7A5B43","text":"Desatar o Laço de Luxo"}}'::jsonb,
+  NOW()
 );
+
+-- Limpa e insere catálogo inicial de produtos de luxo
+DELETE FROM public.products;
+INSERT INTO public.products (
+  id, name, category, category_label, price, short_story, full_story, 
+  primary_image, secondary_image, gallery_images, video_url, details, 
+  fragrance_notes, materials, dimensions, care_instructions, recently_sold_out, is_active
+) VALUES
+('p1', 'Vela Botânica Lavanda & Bergamota', 'casa-rituais', 'Casa Rituais • Velas', 189.00, 'Vela artesanal derramada à mão em cera de coco pura com fragrância olfativa autoral.', 'Frasco de vidro fosco soprado à mão. Infusão de óleos essenciais de lavanda de Grasse e bergamota italiana. Tempo de queima aproximado de 45 horas.', 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=800&q=85', 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=85', ARRAY['https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&w=800&q=85'], NULL, ARRAY['100% Cera de Coco', 'Pavio de Algodão Nobre', 'Frasco Reutilizável'], 'Topo: Bergamota • Coração: Lavanda • Fundo: Âmbar', ARRAY['Cera vegetal', 'Vidro soprado', 'Essência autoral'], '250g • 8.5cm x 9cm', 'Manter o pavio aparado a 0.5cm antes de cada queima.', false, true),
+('p2', 'Cachecol Manteau em Lã & Seda', 'casa-manteau', 'Casa Manteau • Têxtil', 420.00, 'Manto leve tecida em tear artesanal com fios selecionados de lã de alpaca e seda pura.', 'Desenvolvido no atelier com franjas arrematadas manualmente. Toque ultra suave na pele, perfeito para estações amenas e composições atemporais.', 'https://images.unsplash.com/photo-1520903920243-00d872a2d1c9?auto=format&fit=crop&w=800&q=85', 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=800&q=85', ARRAY['https://images.unsplash.com/photo-1520903920243-00d872a2d1c9?auto=format&fit=crop&w=800&q=85'], NULL, ARRAY['70% Lã de Alpaca', '30% Seda Pura', 'Franjas Manuais'], NULL, ARRAY['Lã nobre', 'Fios de seda'], '200cm x 70cm', 'Lavar à mão em água fria com sabão neutro.', false, true),
+('p3', 'Prato Decorativo Cerâmica Terracota', 'casa-objets', 'Casa Objets • Arte', 290.00, 'Prato utilitário em cerâmica de alta temperatura esculpido e esmaltado à mão.', 'Peça autoral única com acabamento rústico sofisticado. Ideal como centro de mesa ou objeto contemplativo de arte.', 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=800&q=85', 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=800&q=85', ARRAY['https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=800&q=85'], NULL, ARRAY['Cerâmica Queimada a 1240°C', 'Esmalte Atóxico', 'Edição Numerada'], NULL, ARRAY['Argila terracota', 'Pigmentos minerais'], 'Diâmetro 28cm x Altura 3.5cm', 'Limpar com pano macio e seco ou lavar suavemente.', false, true);

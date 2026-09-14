@@ -33,7 +33,8 @@ import {
   saveProductToSupabase,
   saveAllProductsToSupabase,
   subscribeToStoreSettingsRealtime,
-  subscribeToProductsRealtime
+  subscribeToProductsRealtime,
+  deepMergeStoreSettings
 } from './lib/supabase';
 import { safeStorage } from './utils/safeStorage';
 
@@ -44,67 +45,7 @@ export default function App() {
       const saved = safeStorage.getItem('maison_store_settings');
       if (saved) {
         const parsed = JSON.parse(saved);
-        
-        // Assegura estritamente os 3 itens reais da Home, eliminando itens fictícios ou de teste
-        const rawNavLinks = parsed.header?.navLinks || DEFAULT_STORE_SETTINGS.header.navLinks;
-        const sanitizedNavLinks = rawNavLinks.filter((l: any) => {
-          if (!l || !l.id) return false;
-          if (l.id === 'historias') return false;
-          if (typeof l.id === 'string' && l.id.startsWith('linha-')) return false;
-          if (typeof l.label === 'string' && l.label.toLowerCase().includes('linha especial')) return false;
-          return true;
-        });
-
-        const finalNavLinks = sanitizedNavLinks.length > 0 
-          ? sanitizedNavLinks 
-          : DEFAULT_STORE_SETTINGS.header.navLinks;
-
-        // Mantém as linhas de produtos configuradas pelo usuário
-        const rawProductLines = parsed.productLines || DEFAULT_STORE_SETTINGS.productLines;
-        const sanitizedProductLines = rawProductLines.filter((l: any) => l && l.id && l.mainTitle);
-
-        return {
-          ...DEFAULT_STORE_SETTINGS,
-          ...parsed,
-          productLines: sanitizedProductLines.length > 0 ? sanitizedProductLines : DEFAULT_STORE_SETTINGS.productLines,
-          header: {
-            ...DEFAULT_STORE_SETTINGS.header,
-            ...(parsed.header || {}),
-            logo: {
-              ...DEFAULT_STORE_SETTINGS.header.logo,
-              ...(parsed.header?.logo || {}),
-              imageUrl: parsed.header?.logo?.imageUrl || DEFAULT_STORE_SETTINGS.header.logo.imageUrl
-            },
-            navLinks: finalNavLinks
-          },
-          hero: {
-            ...DEFAULT_STORE_SETTINGS.hero,
-            ...(parsed.hero || {})
-          },
-          founder: {
-            ...DEFAULT_STORE_SETTINGS.founder,
-            ...(parsed.founder || {})
-          },
-          dashboardFounder: {
-            ...DEFAULT_STORE_SETTINGS.dashboardFounder,
-            ...(parsed.dashboardFounder || {})
-          },
-          deliveryExperience: {
-            ...DEFAULT_STORE_SETTINGS.deliveryExperience,
-            ...(parsed.deliveryExperience || {})
-          },
-          brandQuote: {
-            ...DEFAULT_STORE_SETTINGS.brandQuote,
-            ...(parsed.brandQuote || {})
-          },
-          giftPresentation: {
-            ...DEFAULT_STORE_SETTINGS.giftPresentation,
-            ...(parsed.giftPresentation || {}),
-            slides: (Array.isArray(parsed.giftPresentation?.slides) && parsed.giftPresentation.slides.length > 0)
-              ? parsed.giftPresentation.slides
-              : DEFAULT_STORE_SETTINGS.giftPresentation.slides
-          }
-        };
+        return deepMergeStoreSettings(parsed);
       }
       return DEFAULT_STORE_SETTINGS;
     } catch {
